@@ -1,4 +1,3 @@
-
 variable "azureregion" {
   type    = string
   default = "uksouth"
@@ -6,7 +5,7 @@ variable "azureregion" {
 
 variable "azuresize" {
   type    = string
-  default = "Standard_B1s"
+  default = "Standard_F4s_v2" #4 vCPU 8 GB RAM
 }
 
 variable "siteversion" {
@@ -22,17 +21,18 @@ variable "imageversion" {
 #https://www.packer.io/docs/builders/azure
 source "azure-arm" "source01" {
 
+  subscription_id  =  "b4e8b4c8-1272-4fb1-92b8-c740ac9c4440"
+
   os_type = "Linux"
   image_publisher = "Canonical"
-  image_offer     = "UbuntuServer" #"0001-com-ubuntu-server-bionic" #Ubuntu Server 18.04 LTS  ?
+  image_offer     = "UbuntuServer"
   image_sku       = "18.04-LTS"
  
   managed_image_name                = "example-${var.imageversion}-${var.siteversion}"
   managed_image_resource_group_name = "terraform-azure-lifecycle-rg"
   location                          = "${var.azureregion}"
 
-  vm_size          = "${var.azuresize}"
-  ssh_username  = "root"
+  vm_size      = "${var.azuresize}"
 }
 
 build {
@@ -42,5 +42,4 @@ build {
     extra_arguments = ["--extra-vars", "siteversion=${var.siteversion}"]
     playbook_file   = "./ansible_playbook/prepare.yml"
   }
-
 }

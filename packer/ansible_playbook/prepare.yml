@@ -3,6 +3,7 @@
   hosts: all
   gather_facts: false
   remote_user: root
+  become: true
 
   pre_tasks:
   - name: Install python2 for Ansible
