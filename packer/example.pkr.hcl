@@ -28,7 +28,7 @@ source "azure-arm" "source01" {
   image_sku       = "18.04-LTS"
  
   managed_image_name                = "example-${var.imageversion}-${var.siteversion}"
-  managed_image_resource_group_name = "terraform-azure-lifecycle"
+  managed_image_resource_group_name = "terraform-azure-lifecycle-rg"
   location                          = "${var.azureregion}"
 
   vm_size          = "${var.azuresize}"
