@@ -29,9 +29,10 @@ variable "resourcegroupname" {
 #https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/image
 data "azurerm_image" "example1" {
   resource_group_name = var.resourcegroupname
-  name                = "example-ubuntu-${local.ubuntuversion}-x64-${var.siteversion}" #https://www.packer.io/docs/builders/azure/arm
+  name                = "example-${local.ubuntuversion}-${var.siteversion}"
 }
 
+#terraform import azurerm_resource_group.example1 /subscriptions/b4e8b4c8-1272-4fb1-92b8-c740ac9c4440/resourceGroups/terraform-azure-lifecycle-rg
 resource "azurerm_resource_group" "example1" {
   name     = var.resourcegroupname
   location = local.location
@@ -66,10 +67,19 @@ resource "azurerm_network_interface" "web_nic" {
   count = 2
 }
 
+# Associate network Interface and backend address pool
+resource "azurerm_network_interface_backend_address_pool_association" "assbp-01" {
+  network_interface_id    = azurerm_network_interface.web_nic[count.index].id
+  ip_configuration_name   = "ipconfig1"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.abp-01.id
+
+  count = 2
+}
+
 #https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/linux_virtual_machine
 resource "azurerm_linux_virtual_machine" "web" {
   name                = "web-${count.index}"
-  resource_group_name = azurerm_resource_group.example1
+  resource_group_name = azurerm_resource_group.example1.name
 
   location = local.location
   size     = local.azuresize
@@ -78,45 +88,89 @@ resource "azurerm_linux_virtual_machine" "web" {
 
   network_interface_ids = [azurerm_network_interface.web_nic[count.index].id]
 
+  availability_set_id = azurerm_availability_set.example.id
+
   admin_username = "symadmin"
+
+  admin_ssh_key {
+    username   = "symadmin"
+    public_key = file("id_rsa.pub")
+  }
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
+    storage_account_type = "StandardSSD_LRS"
   }
 
   lifecycle {
     create_before_destroy = true
   }
 
-  # provisioner "local-exec" {
-  #   command = "./check_health.sh ${self.ipv4_address}"
-  # }
+  provisioner "local-exec" {
+    command = "./check_health.sh ${self.ipv4_address}"
+  }
 
   count = 2
 }
 
-# resource "digitalocean_loadbalancer" "public" {
-#   name        = "loadbalancer-1"
-#   region      = "lon1"
-#   azure_tag = "zero-downtime"
+resource "azurerm_availability_set" "example" {
+  name                = "example-aset"
+  location            = azurerm_resource_group.example1.location
+  resource_group_name = azurerm_resource_group.example1.name
 
-#   forwarding_rule {
-#     entry_port     = 80
-#     entry_protocol = "http"
+  platform_update_domain_count = 2
+  platform_fault_domain_count  = 2
+}
 
-#     target_port     = 80
-#     target_protocol = "http"
-#   }
+#LB example https://github.com/kpatnayakuni/azure-quickstart-terraform-configuration/blob/master/101-loadbalancer-with-multivip/main.tf
 
-#   healthcheck {
-#     port                   = 80
-#     protocol               = "http"
-#     path                   = "/"
-#     check_interval_seconds = "5"
-#   }
-# }
+resource "azurerm_public_ip" "example" {
+  name                = "PublicIPForLB"
+  location            = azurerm_resource_group.example1.location
+  resource_group_name = azurerm_resource_group.example1.name
+  allocation_method   = "Static"
+}
 
-# output "lb_ip" {
-#   value = "${digitalocean_loadbalancer.public.ip}"
-# }
+resource "azurerm_lb" "lbpublic" {
+  name                = "loadbalancer-1"
+  location            = azurerm_resource_group.example1.location
+  resource_group_name = azurerm_resource_group.example1.name
+
+  frontend_ip_configuration {
+    name                 = "loadBalancerFrontEnd1"
+    public_ip_address_id = azurerm_public_ip.example.id
+  }
+}
+
+# Backend address pool
+resource "azurerm_lb_backend_address_pool" "abp-01" {
+  name            = "loadBalancerBackEnd"
+  loadbalancer_id = azurerm_lb.lbpublic.id
+}
+
+resource "azurerm_lb_probe" "lbpb-01" {
+  name                = "tcpProbe"
+  resource_group_name = azurerm_resource_group.example1.name
+  port                = 80
+  protocol            = "http"
+  interval_in_seconds = 5
+  loadbalancer_id     = azurerm_lb.lbpublic.id
+  request_path        = "/"
+}
+
+# Loadbalancing rule 1
+resource "azurerm_lb_rule" "lbrule-01" {
+  name                           = "LBRuleForVIP1"
+  resource_group_name            = azurerm_resource_group.example1.name
+  backend_address_pool_id        = azurerm_lb_backend_address_pool.abp-01.id
+  loadbalancer_id                = azurerm_lb.lbpublic.id
+  protocol                       = "Tcp"
+  frontend_port                  = 80
+  backend_port                   = 80
+  probe_id                       = azurerm_lb_probe.lbpb-01.id
+  frontend_ip_configuration_name = "loadBalancerFrontEnd1"
+}
+
+output "lb_ip" {
+  value = azurerm_public_ip.example.ip_address
+}
