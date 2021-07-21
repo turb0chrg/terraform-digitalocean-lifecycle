@@ -29,7 +29,14 @@ variable "resourcegroupname" {
 #https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/image
 data "azurerm_image" "example1" {
   resource_group_name = var.resourcegroupname
-  name                = "example-${local.ubuntuversion}-${var.siteversion}"
+  name                = "example-${local.ubuntuversion}-${random_pet.server.keepers.siteversion}"
+}
+
+resource "random_pet" "server" {
+  keepers = {
+    # Generate a new pet name each time we switch to a new AMI id
+    siteversion = "${var.siteversion}"
+  }
 }
 
 #terraform import azurerm_resource_group.example1 /subscriptions/b4e8b4c8-1272-4fb1-92b8-c740ac9c4440/resourceGroups/terraform-azure-lifecycle-rg
@@ -88,7 +95,7 @@ resource "azurerm_network_interface_backend_address_pool_association" "assbp-01"
 
 #https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/linux_virtual_machine
 resource "azurerm_linux_virtual_machine" "web" {
-  name                = "web-${count.index}"
+  name                = "web-${random_pet.server.id}-${count.index}"
   resource_group_name = azurerm_resource_group.example1.name
 
   location = local.location
@@ -117,7 +124,7 @@ resource "azurerm_linux_virtual_machine" "web" {
   }
 
   provisioner "local-exec" {
-    command = "/check_health.sh ${self.public_ip_address}"
+    command = "./check_health.sh ${self.public_ip_address}"
   }
 
   count = 2
@@ -149,6 +156,7 @@ resource "azurerm_lb" "lbpublic" {
   frontend_ip_configuration {
     name                 = "loadBalancerFrontEnd1"
     public_ip_address_id = azurerm_public_ip.example.id
+    private_ip_address_version    = "IPv4"
   }
 }
 
