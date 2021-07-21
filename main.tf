@@ -13,6 +13,7 @@ provider "azurerm" {
 }
 
 locals {
+  servername    = "web"
   ubuntuversion = "18-04"
   azuresize     = "Standard_B1s"
   location      = "uksouth"
@@ -37,6 +38,8 @@ resource "random_pet" "server" {
     # Generate a new pet name each time we switch to a new AMI id
     siteversion = "${var.siteversion}"
   }
+
+  length = 1
 }
 
 #terraform import azurerm_resource_group.example1 /subscriptions/b4e8b4c8-1272-4fb1-92b8-c740ac9c4440/resourceGroups/terraform-azure-lifecycle-rg
@@ -60,7 +63,7 @@ resource "azurerm_subnet" "subnet01" {
 }
 
 resource "azurerm_network_interface" "web_nic" {
-  name                = "web-${format("%02d", count.index + 1)}-nic-01"
+  name                = "${local.servername}-${random_pet.server.id}-${format("%02d", count.index + 1)}-nic"
   location            = local.location
   resource_group_name = azurerm_resource_group.example1.name
 
@@ -75,7 +78,7 @@ resource "azurerm_network_interface" "web_nic" {
 }
 
 resource "azurerm_public_ip" "vmpips" {
-  name                = "pip${count.index}"
+  name                = "${local.servername}-${random_pet.server.id}-${format("%02d", count.index + 1)}-pip"
   location            = azurerm_resource_group.example1.location
   resource_group_name = azurerm_resource_group.example1.name
   allocation_method   = "Static"
@@ -95,7 +98,7 @@ resource "azurerm_network_interface_backend_address_pool_association" "assbp-01"
 
 #https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/linux_virtual_machine
 resource "azurerm_linux_virtual_machine" "web" {
-  name                = "web-${random_pet.server.id}-${count.index}"
+  name                = "${local.servername}-${random_pet.server.id}-${format("%02d", count.index + 1)}"
   resource_group_name = azurerm_resource_group.example1.name
 
   location = local.location
@@ -154,9 +157,9 @@ resource "azurerm_lb" "lbpublic" {
   resource_group_name = azurerm_resource_group.example1.name
 
   frontend_ip_configuration {
-    name                 = "loadBalancerFrontEnd1"
-    public_ip_address_id = azurerm_public_ip.example.id
-    private_ip_address_version    = "IPv4"
+    name                       = "loadBalancerFrontEnd1"
+    public_ip_address_id       = azurerm_public_ip.example.id
+    private_ip_address_version = "IPv4"
   }
 }
 
