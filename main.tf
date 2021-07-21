@@ -43,7 +43,6 @@ resource "azurerm_virtual_network" "example01" {
   location            = local.location
   resource_group_name = azurerm_resource_group.example1.name
   address_space       = ["10.192.6.0/24"]
-
 }
 
 resource "azurerm_subnet" "subnet01" {
@@ -62,10 +61,21 @@ resource "azurerm_network_interface" "web_nic" {
     name                          = "ipconfig1"
     subnet_id                     = azurerm_subnet.subnet01.id
     private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.vmpips[count.index].id
   }
 
   count = 2
 }
+
+resource "azurerm_public_ip" "vmpips" {
+  name                = "pip${count.index}"
+  location            = azurerm_resource_group.example1.location
+  resource_group_name = azurerm_resource_group.example1.name
+  allocation_method   = "Static"
+
+  count = 2
+}
+
 
 # Associate network Interface and backend address pool
 resource "azurerm_network_interface_backend_address_pool_association" "assbp-01" {
@@ -107,7 +117,7 @@ resource "azurerm_linux_virtual_machine" "web" {
   }
 
   provisioner "local-exec" {
-    command = "./check_health.sh ${self.ipv4_address}"
+    command = "/check_health.sh ${self.public_ip_address}"
   }
 
   count = 2
