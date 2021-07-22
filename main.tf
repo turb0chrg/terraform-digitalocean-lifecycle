@@ -73,7 +73,6 @@ resource "azurerm_network_interface" "web_nic" {
     private_ip_address_allocation = "Dynamic"
     public_ip_address_id          = azurerm_public_ip.vmpips[count.index].id
   }
-
   count = 2
 }
 
@@ -86,12 +85,18 @@ resource "azurerm_public_ip" "vmpips" {
   count = 2
 }
 
-
 # Associate network Interface and backend address pool
 resource "azurerm_network_interface_backend_address_pool_association" "assbp-01" {
   network_interface_id    = azurerm_network_interface.web_nic[count.index].id
   ip_configuration_name   = "ipconfig1"
   backend_address_pool_id = azurerm_lb_backend_address_pool.abp-01.id
+
+  #https://www.reddit.com/r/Terraform/comments/hdtb9x/azure_zero_downtme_vms_are_impossible/
+  depends_on = [ azurerm_linux_virtual_machine.web ] 
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   count = 2
 }
